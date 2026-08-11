@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header p.subtitle { opacity: 0.85; margin-top: 6px; font-size: 0.95em; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+        .stat-card {
+            background: #f8f9ff;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            border-left: 5px solid #4facfe;
+            transition: transform 0.3s ease;
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-number { font-size: 2.5em; font-weight: bold; color: #4facfe; margin-bottom: 10px; }
+        .stat-label { color: #666; font-size: 1.1em; }
+        .chart-container { padding: 30px; background: #f8f9ff; }
+        .section-title { margin-bottom: 20px; color: #333; }
+        .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; padding: 30px; }
+        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #4facfe; color: white; font-weight: 600; }
+        tr:hover { background: #f5f7ff; }
+        .live-badge {
+            background: #4ade80; color: white; padding: 5px 12px;
+            border-radius: 20px; font-size: 0.9em; font-weight: bold;
+            display: inline-block; margin-top: 10px;
+        }
+        .live-badge.offline { background: #ef4444; }
+        .top-pages { background: white; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 10px; }
+        .top-pages li { list-style: none; display: flex; justify-content: space-between; padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .top-pages li:last-child { border-bottom: none; }
+        .top-pages .count { color: #4facfe; font-weight: bold; }
+        .embed-box {
+            margin: 0 30px 30px; padding: 20px; background: #111827; color: #d1fae5;
+            border-radius: 12px; font-family: 'Consolas', monospace; font-size: 0.9em;
+            overflow-x: auto; white-space: pre;
+        }
+        .empty { text-align:center; color:#999; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Website Analytics Dashboard</h1>
+            <p class="subtitle">Live data from your tracking backend</p>
+            <span id="liveBadge" class="live-badge">Connecting…</span>
+        </div>
+
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <div class="chart-container">
+            <canvas id="visitsChart"></canvas>
+        </div>
+
+        <div class="two-col">
+            <div>
+                <h2 class="section-title">Recent Visitors</h2>
+                <table id="visitorsTable">
+                    <thead>
+                        <tr>
+                            <th>Time</th><th>Location</th><th>Browser</th><th>OS</th><th>Page</th><th>Referrer</th>
+                        </tr>
+                    </thead>
+                    <tbody id="visitorsBody"></tbody>
+                </table>
+            </div>
+            <div>
+                <h2 class="section-title">Top Pages</h2>
+                <ul class="top-pages" id="topPages"></ul>
+            </div>
+        </div>
+
+        <h2 class="section-title" style="padding: 0 30px;">Add tracking to any site</h2>
+        <div class="embed-box" id="embedSnippet">Loading snippet…</div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        let chart = null;
+
+        async function fetchJSON(url) {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Request failed: ' + url);
+            return res.json();
+        }
+
+        function setLive(ok) {
+            const badge = document.getElementById('liveBadge');
+            badge.textContent = ok ? 'Live Tracking' : 'Backend unreachable';
+            badge.classList.toggle('offline', !ok);
+        }
+
+        async function refreshStats() {
+            const stats = await fetchJSON(`${API_BASE}/api/stats`);
+            const grid = document.getElementById('statsGrid');
+            const cards = [
+                { label: 'Total Visits', value: stats.totalVisits.toLocaleString(), icon: '📊' },
+                { label: 'Unique Visitors', value: stats.uniqueVisitors.toLocaleString(), icon: '👥' },
+                { label: 'Today', value: stats.todayVisits.toLocaleString(), icon: '📅' },
+                { label: 'Bounce Rate', value: `${stats.bounceRate}%`, icon: '📉' }
+            ];
+            grid.innerHTML = cards.map(c => `
+                <div class="stat-card">
+                    <div class="stat-number">${c.icon} ${c.value}</div>
+                    <div class="stat-label">${c.label}</div>
+                </div>
+            `).join('');
+        }
+
+        async function refreshChart() {
+            const { labels, data } = await fetchJSON(`${API_BASE}/api/chart?hours=12`);
+            const ctx = document.getElementById('visitsChart').getContext('2d');
+            if (chart) {
+                chart.data.labels = labels;
+                chart.data.datasets[0].data = data;
+                chart.update();
+                return;
+            }
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Visitors',
+                        data,
+                        borderColor: '#4facfe',
+                        backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, s => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[s]));
+        }
+
+        async function refreshVisitors() {
+            const visitors = await fetchJSON(`${API_BASE}/api/visitors?limit=15`);
+            const tbody = document.getElementById('visitorsBody');
+            if (!visitors.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">No visitors yet — add the tracking snippet below to a page and reload it.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = visitors.map(v => `
+                <tr>
+                    <td>${new Date(v.timestamp).toLocaleTimeString()}</td>
+                    <td>${escapeHtml(v.city)}, ${escapeHtml(v.country)}</td>
+                    <td>${escapeHtml(v.browser)}</td>
+                    <td>${escapeHtml(v.os)}</td>
+                    <td>${escapeHtml(v.page)}</td>
+                    <td>${escapeHtml(v.referrer)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function refreshTopPages() {
+            const pages = await fetchJSON(`${API_BASE}/api/top-pages`);
+            const list = document.getElementById('topPages');
+            if (!pages.length) {
+                list.innerHTML = '<li class="empty">No page data yet</li>';
+                return;
+            }
+            list.innerHTML = pages.map(p => `
+                <li><span>${escapeHtml(p.page)}</span><span class="count">${p.count}</span></li>
+            `).join('');
+        }
+
+        function setEmbedSnippet() {
+            document.getElementById('embedSnippet').textContent =
+`<script src="${API_BASE}/track.js"><\/script>`;
+        }
+
+        async function refreshAll() {
+            try {
+                await Promise.all([refreshStats(), refreshChart(), refreshVisitors(), refreshTopPages()]);
+                setLive(true);
+            } catch (err) {
+                console.error(err);
+                setLive(false);
+            }
+        }
+
+        setEmbedSnippet();
+        refreshAll();
+        setInterval(refreshAll, 5000);
+    </script>
+</body>
+</html>

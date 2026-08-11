@@ -1,0 +1,21 @@
+{
+  "name": "analytics-dashboard",
+  "version": "1.0.0",
+  "description": "Real visitor-tracking backend + dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "geoip-lite": "^1.4.10",
+    "nanoid": "^3.3.18",
+    "ua-parser-js": "^2.0.10"
+  }
+}
