@@ -3,6 +3,7 @@ services:
     name: my-first-repo
     env: node
     plan: free
+    rootDir: name-of-subfolder
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /health
